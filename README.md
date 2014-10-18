@@ -16,3 +16,7 @@ An example configuration file is included.
 ### docopt
 
     sudo apt-get -y install python-docopt
+
+### pyrecon
+
+- <https://github.com/wdbm/pyrecon>
