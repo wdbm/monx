@@ -11,7 +11,7 @@
 #                                                                              #
 # The program monx can monitor events and execute corresponding actions.       #
 #                                                                              #
-# copyright (C) 2014 William Breaden Madden                                    #
+# copyright (C) 2014 2015 William Breaden Madden                               #
 #                                                                              #
 # This software is released under the terms of the GNU General Public License  #
 # version 3 (GPLv3).                                                           #
@@ -42,44 +42,35 @@ Usage:
     monx.py [options]
 
 Options:
-    -h, --help                 Show this help message.
-    --version                  Show the version and exit.
-    -c, --configuration=CONF   configuration (file) [default: ~/.ucom]
+    -h, --help                display help message
+    --version                 display version and exit
+    -v, --verbose             verbose logging
+    -u, --username=USERNAME   username
+    -c, --configuration=CONF  configuration (file) [default: ~/.ucom]
 """
 
-version = "2014-09-11T2035"
+name    = "monx"
+version = "2015-09-22T2134Z"
 
 import os
 import sys
-from time import sleep, time
-import ctypes as ctypes
-from ctypes.util import find_library
-from docopt import docopt
+import time
+import ctypes
+import ctypes.util
+import docopt
 import logging
-import pyrecon as pyrecon
+import technicolor
+import shijian
+import pyprel
+import pyrecon
 
 def main(options):
+
     global program
-    global keyboard
     program = Program(options = options)
+
     keyboard = Keyboard()
-    keyboard.logLoop()
-
-class Program(object):
-
-    def __init__(
-        self,
-        parent = None,
-        options = None # docopt options
-        ):
-        # logging
-        global logger
-        logger = logging.getLogger(__name__)
-        logging.basicConfig()
-        logger.level = logging.INFO
-        # configuration
-        configurationFileName = options["--configuration"]
-        self.configuration = pyrecon.openConfiguration(configurationFileName)
+    keyboard.log_loop()
 
 class Keyboard:
 
@@ -88,7 +79,7 @@ class Keyboard:
         parent = None
         ):
         # X11 interface
-        self.X11 = ctypes.cdll.LoadLibrary(find_library("X11"))
+        self.X11 = ctypes.cdll.LoadLibrary(ctypes.util.find_library("X11"))
         self.displayX11 = self.X11.XOpenDisplay(None)
         # keyboard
         # Store the keyboard state, which is characterised by 32 bytes, with
@@ -96,7 +87,7 @@ class Keyboard:
         self.keyboardState = (ctypes.c_char * 32)()
         self.stateCapsLock = 0
         # Define special keys (byte, byte value).
-        self.shiftKeys = ((6,4), (7,64))
+        self.shiftKeys = ((6, 4), (7, 64))
         self.modifiers = {
             "left shift":  (6,   4),
             "right shift": (7,  64),
@@ -105,9 +96,9 @@ class Keyboard:
             "left alt":    (8,   1),
             "right alt":   (13, 16)
         }
-        self.lastPressed = set()
+        self.lastPressed         = set()
         self.lastPressedAdjusted = set()
-        self.stateLastModifier = {}
+        self.stateLastModifier   = {}
         # Define a dictionary of key byte numbers and key values.
         self.keyMapping = {
             1: {
@@ -195,17 +186,17 @@ class Keyboard:
                 0b10000000: ("<up>", "shift-up")
             },
             14: {
-                0b00000001: ("<pageup>", "shift-pageup"),
-                0b00000010: ("<left>", "shift-left"),
-                0b00000100: ("<right>", "shift-right"),
-                0b00001000: ("<end>", "shift-end"),
-                0b00010000: ("<down>", "shift-down"),
+                0b00000001: ("<pageup>",   "shift-pageup"),
+                0b00000010: ("<left>",     "shift-left"),
+                0b00000100: ("<right>",    "shift-right"),
+                0b00001000: ("<end>",      "shift-end"),
+                0b00010000: ("<down>",     "shift-down"),
                 0b00100000: ("<pagedown>", "shift-PgDn"),
-                0b01000000: ("<insert>", "shift-insert")
+                0b01000000: ("<insert>",   "shift-insert")
             },
         }
 
-    def accessKeys(self):
+    def access_keys(self):
         # Access raw keypresses.
         # The function XQueryKeymap returns a bit vector for the logical state
         # of the keyboard for each bit set to 1 indicates that the corresponding
@@ -230,8 +221,8 @@ class Keyboard:
         for i, k in enumerate(rawKeypresses):
             o = ord(k)
             if o:
-                sleep(0.1)
-                logger.info("detected keystroke code: {i}, {o}".format(
+                time.sleep(0.1)
+                log.info("\ndetected keystroke code: {i}, {o}".format(
                     i = i,
                     o = o
                 ))
@@ -251,44 +242,153 @@ class Keyboard:
             pressedKeys = None
         stateChanged = self.stateLastModifier and (stateChanged or stateModifier != self.stateLastModifier)
         self.stateLastModifier = stateModifier
+        # stateChanged: Boolean
+        # stateModifier: dictionary of status of available modifiers, e.g.:
+        # {
+        #     'left shift':  True,
+        #     'right alt':   False,
+        #     'right shift': False,
+        #     'left alt':    False,
+        #     'left ctrl':   False,
+        #     'right ctrl':  False
+        # }
+        # pressedKeys: string of key detected, e.g. e.
         return (stateChanged, stateModifier, pressedKeys)
 
-    def logLoop(self):
+    def log_loop(self):
         while True:
-            sleep(0.005)
-            changed, stateModifier, pressedKeys = self.accessKeys()
-            if changed and pressedKeys is not None:
-                logger.info("detected keystroke: {key}".format(
+            time.sleep(0.005)
+            stateChanged, stateModifier, pressedKeys = self.access_keys()
+            if stateChanged and pressedKeys is not None:
+                log.info("detected keystroke: {key}".format(
                     key = pressedKeys
                 ))
-                self.detectEvent(pressedKeys)
+                self.detect_event(pressedKeys)
 
-    def detectEvent(
+    def detect_event(
         self,
         pressedKeys
-    ):
+        ):
         # If the pressed keys are specified as an event in the configuration,
         # execute the command corresponding to the event.
         if pressedKeys in program.configuration["event-execution-map"]:
             # log
             if "description" in program.configuration["event-execution-map"][pressedKeys]:
-                logger.info("event detected: {description}".format(description = program.configuration["event-execution-map"][pressedKeys]["description"]))
+                log.info("event detected: {description}".format(description = program.configuration["event-execution-map"][pressedKeys]["description"]))
             else:
-                logger.info("event detected".format(
+                log.info("event detected".format(
                     key = pressedKeys
                 ))
             # execute command
             command = program.configuration["event-execution-map"][pressedKeys]["command"]
-            self.executeCommand(command)
+            self.execute_command(command)
 
-    def executeCommand(
+    def execute_command(
         self,
         command
-    ):
+        ):
         os.system(command)
 
+class Program(object):
+
+    def __init__(
+        self,
+        parent  = None,
+        options = None
+        ):
+
+        # internal options
+        self.displayLogo           = True
+
+        # clock
+        global clock
+        clock = shijian.Clock(name = "program run time")
+
+        # name, version, logo
+        if "name" in globals():
+            self.name              = name
+        else:
+            self.name              = None
+        if "version" in globals():
+            self.version           = version
+        else:
+            self.version           = None
+        if "logo" in globals():
+            self.logo              = logo
+        elif "logo" not in globals() and hasattr(self, "name"):
+            self.logo              = pyprel.renderBanner(
+                                         text = self.name.upper()
+                                     )
+        else:
+            self.displayLogo       = False
+            self.logo              = None
+
+        # options
+        self.options               = options
+        self.userName              = self.options["--username"]
+        self.verbose               = self.options["--verbose"]
+
+        # default values
+        if self.userName is None:
+            self.userName = os.getenv("USER")
+
+        # configuration
+        configurationFileName      = self.options["--configuration"]
+        self.configuration = pyrecon.openConfiguration(configurationFileName)
+
+        # logging
+        global log
+        log = logging.getLogger(__name__)
+        logging.root.addHandler(technicolor.ColorisingStreamHandler())
+
+        # logging level
+        if self.verbose:
+            logging.root.setLevel(logging.DEBUG)
+        else:
+            logging.root.setLevel(logging.INFO)
+
+        self.engage()
+
+    def engage(
+        self
+        ):
+        pyprel.printLine()
+        # logo
+        if self.displayLogo:
+            log.info(pyprel.centerString(text = self.logo))
+            pyprel.printLine()
+        # engage alert
+        if self.name:
+            log.info("initiate {name}".format(
+                name = self.name
+            ))
+        # version
+        if self.version:
+            log.info("version: {version}".format(
+                version = self.version
+            ))
+        log.info("initiation time: {time}".format(
+            time = clock.startTime()
+        ))
+
+    def terminate(
+        self
+        ):
+        clock.stop()
+        log.info("termination time: {time}".format(
+            time = clock.stopTime()
+        ))
+        log.info("time statistics report:\n{report}".format(
+            report = shijian.clocks.report()
+        ))
+        log.info("terminate {name}".format(
+            name = self.name
+        ))
+        pyprel.printLine()
+        sys.exit()
+
 if __name__ == "__main__":
-    options = docopt(__doc__)
+    options = docopt.docopt(__doc__)
     if options["--version"]:
         print(version)
         exit()
