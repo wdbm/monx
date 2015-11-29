@@ -1,0 +1,13 @@
+- event-execution-map
+   - shift-left
+      - description: snap left
+      - command: /usr/bin/python /usr/share/ucom/snap.py --left
+   - shift-right
+      - description: snap right
+      - command: /usr/bin/python /usr/share/ucom/snap.py --right
+    - shift-up
+      - description: snap up
+      - command: /usr/bin/python /usr/share/ucom/snap.py --up
+   - shift-down
+      - description: snap down
+      - command: /usr/bin/python /usr/share/ucom/snap.py --down

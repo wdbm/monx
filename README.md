@@ -13,12 +13,6 @@ An example configuration file is included.
 
 # prerequisites
 
-## docopt
-
-```Bash
-sudo apt-get -y install python-docopt
-```
-
 ## pyrecon
 
 - <https://github.com/wdbm/pyrecon>
