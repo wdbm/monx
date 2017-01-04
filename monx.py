@@ -50,7 +50,7 @@ Options:
 """
 
 name    = "monx"
-version = "2015-09-22T2134Z"
+version = "2017-01-04T1318Z"
 
 import os
 import sys
@@ -59,10 +59,10 @@ import ctypes
 import ctypes.util
 import docopt
 import logging
+
 import technicolor
 import shijian
 import pyprel
-import pyrecon
 
 def main(options):
 
@@ -334,7 +334,9 @@ class Program(object):
 
         # configuration
         configurationFileName      = self.options["--configuration"]
-        self.configuration = pyrecon.openConfiguration(configurationFileName)
+        self.configuration = shijian.open_configuration(
+            filename = configurationFileName
+        )
 
         # logging
         global log
